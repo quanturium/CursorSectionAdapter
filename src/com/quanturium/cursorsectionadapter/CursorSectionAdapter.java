@@ -4,6 +4,7 @@ import java.util.SortedMap;
 
 import android.content.Context;
 import android.database.Cursor;
+import android.database.DataSetObserver;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CursorAdapter;
@@ -12,13 +13,32 @@ public abstract class CursorSectionAdapter extends CursorAdapter
 {
 	private Context						context;
 	private SortedMap<Integer, Object>	sections;
+	private DataSetObserver				dataSetObserver;
 
 	public CursorSectionAdapter(Context context, Cursor c)
 	{
 		super(context, c, 0);
 		this.context = context;
-		this.sections = initializeSections(c);
-
+		
+		if(c != null)
+		{
+			this.sections = initializeSections(c);
+			this.dataSetObserver = new DataSetObserver()
+			{
+				@Override
+				public void onChanged()
+				{
+					sections = initializeSections(getCursor());
+				}
+				
+				@Override
+				public void onInvalidated()
+				{
+					sections.clear();
+				}
+			};
+			c.registerDataSetObserver(dataSetObserver);
+		}		
 	}
 
 	protected abstract SortedMap<Integer, Object> initializeSections(Cursor c);
@@ -102,7 +122,7 @@ public abstract class CursorSectionAdapter extends CursorAdapter
 		{
 			if (!getCursor().moveToPosition(getRealItemPosition(position)))
 				throw new IllegalStateException("couldn't move cursor to position " + position);
-			
+
 			View v;
 			if (convertView == null)
 			{
@@ -115,6 +135,25 @@ public abstract class CursorSectionAdapter extends CursorAdapter
 			bindView(v, context, getCursor());
 			return v;
 		}
+	}
+
+	@Override
+	public Cursor swapCursor(Cursor newCursor)
+	{
+		if (getCursor() != null)
+		{
+			getCursor().unregisterDataSetObserver(dataSetObserver);
+		}
+
+		Cursor oldCursor = super.swapCursor(newCursor);
+
+		if (newCursor != null)
+		{
+			this.sections = initializeSections(newCursor);
+			newCursor.registerDataSetObserver(dataSetObserver);
+		}
+
+		return oldCursor;
 	}
 
 	protected abstract void bindSeparatorView(View v, Context context2, Object item);
